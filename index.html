@@ -2,11 +2,13 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GRID Emoji Studio</title>
-<script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
-<script src="engine.js"></script>
-<script src="templates.js"></script>
+<script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js" defer></script>
+<script src="engine.js" defer></script>
+<script src="templates.js" defer></script>
+<script src="app.js" defer></script>
 <style>
   :root { color-scheme: dark; }
   body { margin:0; background:#14181d; color:#aab6c2; font-family:-apple-system,'Segoe UI',sans-serif; }
@@ -67,94 +69,5 @@
   <div class="grid" id="pack"></div>
 </main>
 <div id="status"></div>
-
-<script>
-window.addEventListener('error', e => {
-  const s = document.getElementById('status');
-  s.textContent = 'ERR: ' + (e.message || e.type) + (e.filename ? ' @' + e.filename.split('/').pop() + ':' + e.lineno : '');
-  s.style.opacity = 1; s.style.background = '#7a2f3a';
-});
-
-const state = {
-  word: 'GRID', color: '#ffffff', stroke: false, strokeColor: '#000000', size: 1.0,
-};
-
-function flash(msg) {
-  const s = document.getElementById('status');
-  s.textContent = msg; s.style.opacity = 1;
-  clearTimeout(s._t); s._t = setTimeout(() => s.style.opacity = 0, 2200);
-}
-
-function buildPack(tpl) {
-  const r = ES.replaceSlots(tpl.doc, {
-    word: state.word, color: state.color, size: state.size,
-    stroke: state.stroke, strokeColor: state.strokeColor,
-  });
-  return r.doc;
-}
-
-function makeCard(container, name, label, builder) {
-  const card = document.createElement('div');
-  card.className = 'card';
-  const player = document.createElement('lottie-player');
-  player.setAttribute('loop', ''); player.setAttribute('autoplay', '');
-  const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = label;
-  const btn = document.createElement('button'); btn.textContent = 'Скачать .tgs';
-  const warn = document.createElement('div'); warn.className = 'warn';
-  btn.addEventListener('click', () => {
-    const doc = builder();
-    const raw = new TextEncoder().encode(JSON.stringify(doc));
-    const gz = pako.gzip(raw);
-    if (gz.length > 64 * 1024) { warn.textContent = `⚠ ${Math.round(gz.length/1024)} КБ — больше лимита Telegram 64 КБ`; }
-    else warn.textContent = `${Math.round(gz.length/1024)} КБ`;
-    const blob = new Blob([gz], { type: 'application/gzip' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${state.word || 'name'}_${name}.tgs`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    flash(`Скачано: ${a.download}`);
-  });
-  card.append(player, nm, btn, warn);
-  container.appendChild(card);
-  return { player, builder, name };
-}
-
-const cards = [];
-const packBox = document.getElementById('pack');
-for (const tpl of window.TEMPLATES) {
-  cards.push(makeCard(packBox, tpl.name.replace(/[^\w-]+/g, '_').slice(0, 24), tpl.name.slice(0, 24), () => buildPack(tpl)));
-}
-
-function rebuildAll() {
-  const w = document.getElementById('word').value.trim() || 'GRID';
-  state.word = w;
-  state.color = document.getElementById('color').value;
-  state.stroke = document.getElementById('strokeOn').checked;
-  state.strokeColor = document.getElementById('strokeColor').value;
-  state.size = Number(document.getElementById('size').value) / 100;
-  document.getElementById('sizeVal').textContent = document.getElementById('size').value + '%';
-  const errs = [];
-  for (const c of cards) {
-    try { c.player.load(JSON.stringify(c.builder())); }
-    catch (e) { errs.push(c.name + ': ' + e.message); }
-  }
-  if (errs.length) {
-    const s = document.getElementById('status');
-    s.textContent = 'BUILD ERRORS: ' + errs.slice(0, 3).join(' | ');
-    s.style.opacity = 1; s.style.background = '#7a2f3a';
-  }
-}
-
-let deb;
-function onInput() { clearTimeout(deb); deb = setTimeout(rebuildAll, 700); }
-['word', 'color', 'strokeOn', 'strokeColor', 'size'].forEach(id => {
-  document.getElementById(id).addEventListener('input', onInput);
-});
-
-// lottie-player (Lit) mounts its shadow DOM asynchronously: a load() call in
-// the same tick as appendChild is silently dropped. Defer the first build.
-setTimeout(rebuildAll, 250);
-</script>
 </body>
 </html>

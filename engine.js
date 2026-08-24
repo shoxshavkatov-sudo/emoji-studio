@@ -539,7 +539,10 @@ function findStyle(layer) {
   return { fc, sc, sw };
 }
 
-/* build word group fitted into bbox, layer-space (cell=1 units, scaled by tr) */
+/* build word group fitted into bbox, layer-space.
+ * rlottie-safe: letters are plain sh paths with scale/rotation baked into
+ * coordinates (no rc rects, no group scaling) — mirrors the geometry style of
+ * the original logo that renders fine in Telegram. */
 function wordGroupForBBox(word, bbox, color, sizeMult, useStroke, strokeColor) {
   const [x0, y0, x1, y1] = bbox;
   const bw = x1 - x0, bh = y1 - y0;
@@ -548,18 +551,25 @@ function wordGroupForBBox(word, bbox, color, sizeMult, useStroke, strokeColor) {
   const effW = vertical ? 5 : wCells, effH = vertical ? wCells : 5;
   const s = Math.min(bw / effW, bh / effH) * sizeMult;
   const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  const rot = vertical ? Math.PI / 2 : 0;
+  const cos = Math.cos(rot), sin = Math.sin(rot);
   const items = [];
   for (const { ch, x } of letters) {
     const g = glyphOf(ch);
     for (let r = 1; r < g.length; r++) {
       const [c, row, wc, hr] = g[r];
-      items.push(rc(x + c + wc / 2 - wCells / 2, row - 2.5 + hr / 2, wc, hr, 0.15));
+      const rx = x + c - wCells / 2, ry = row - 2.5;
+      const corners = [[rx, ry], [rx + wc, ry], [rx + wc, ry + hr], [rx, ry + hr]];
+      const v = corners.map(([px, py]) => [
+        Math.round((cx + (px * cos - py * sin) * s) * 100) / 100,
+        Math.round((cy + (px * sin + py * cos) * s) * 100) / 100,
+      ]);
+      items.push({ ty: 'sh', ks: st({ i: [[0, 0], [0, 0], [0, 0], [0, 0]], o: [[0, 0], [0, 0], [0, 0], [0, 0]], v, c: true }) });
     }
   }
   items.push(fill(color));
-  if (useStroke) items.push(stroke(strokeColor || BLACK, Math.max(0.08, 2 / Math.max(0.01, s))));
-  items.push(trspec({ p: st([cx, cy]), s: st([100 * s, 100 * s]), r: st(vertical ? 90 : 0) }));
-  return group('NAME', items);
+  if (useStroke) items.push(stroke(strokeColor || BLACK, 3));
+  return group('NAME', items, trspec());
 }
 
 function replaceSlots(baseDoc, opts) {
