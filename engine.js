@@ -595,9 +595,47 @@ function replaceSlots(baseDoc, opts) {
   return { doc: data, replaced };
 }
 
+/* recolor every fill/stroke of a doc to one color, keeping opacities;
+ * name/text groups are left alone */
+function tintDoc(docData, hex) {
+  const c = hexToRgb(hex);
+  const recolor = k => {
+    if (Array.isArray(k) && k.length >= 3 && typeof k[0] === 'number') {
+      return [c[0], c[1], c[2], k.length > 3 ? k[3] : 1];
+    }
+    if (k && typeof k === 'object' && Array.isArray(k.k)) {
+      for (const kf of k.k) {
+        if (kf && Array.isArray(kf.s) && kf.s.length >= 3 && typeof kf.s[0] === 'number') {
+          kf.s = [c[0], c[1], c[2], kf.s.length > 3 ? kf.s[3] : 1];
+        }
+      }
+      return k;
+    }
+    return k;
+  };
+  const walkItems = items => {
+    for (const it of items || []) {
+      if (!it) continue;
+      if (it.ty === 'fl' || it.ty === 'st') {
+        if (it.c) it.c.k = recolor(it.c.k);
+      } else if (it.ty === 'gr') {
+        const nm = String(it.nm || '');
+        if (nm === 'NAME' || nm.startsWith('l_') || nm === 't') continue;
+        walkItems(it.it);
+      }
+    }
+  };
+  const walkLayers = layers => {
+    for (const l of layers || []) walkItems(l.shapes);
+  };
+  walkLayers(docData.layers);
+  for (const a of docData.assets || []) if (a && a.layers) walkLayers(a.layers);
+  return docData;
+}
+
 root.ES = {
   FONT, layoutWord, wordRects, letterGroups, pickCell,
-  OURS, replaceSlots, hexToRgb, doc,
+  OURS, replaceSlots, tintDoc, hexToRgb, doc,
 };
 
 })(typeof window !== 'undefined' ? window : globalThis);

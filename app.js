@@ -1,71 +1,125 @@
-/* Emoji Studio app: lazy previews + TGS download. Requires engine.js, templates.js, pako. */
+/* Emoji Studio app: our templates + pack slots, tint, selection, lazy previews, TGS download. */
 (function () {
 'use strict';
 
-const state = { word: 'GRID', color: '#ffffff', stroke: false, strokeColor: '#000000', size: 1.0 };
+const state = {
+  word: 'GRID', color: '#ffffff', stroke: false, strokeColor: '#000000',
+  tint: false, tintColor: '#ffffff', size: 1.0,
+};
 
 function flash(msg, bad) {
   const s = document.getElementById('status');
   s.textContent = msg; s.style.opacity = 1;
-  s.style.background = bad ? '#7a2f3a' : '#27435f';
-  clearTimeout(s._t); s._t = setTimeout(() => s.style.opacity = 0, 2200);
+  s.style.background = bad ? '#7a2f3a' : 'rgba(22,24,28,.95)';
+  clearTimeout(s._t); s._t = setTimeout(() => s.style.opacity = 0, 2400);
 }
 window.addEventListener('error', e => flash('ERR: ' + (e.message || e.type), true));
-
-function buildPack(tpl) {
-  return ES.replaceSlots(tpl.doc, {
-    word: state.word, color: state.color, size: state.size,
-    stroke: state.stroke, strokeColor: state.strokeColor,
-  }).doc;
-}
 
 function readState() {
   state.word = document.getElementById('word').value.trim() || 'GRID';
   state.color = document.getElementById('color').value;
   state.stroke = document.getElementById('strokeOn').checked;
   state.strokeColor = document.getElementById('strokeColor').value;
+  state.tint = document.getElementById('tintOn').checked;
+  state.tintColor = document.getElementById('tintColor').value;
   state.size = Number(document.getElementById('size').value) / 100;
   document.getElementById('sizeVal').textContent = document.getElementById('size').value + '%';
 }
 
-function download(card) {
-  const doc = buildPack(card.tpl);
-  const raw = new TextEncoder().encode(JSON.stringify(doc));
-  const gz = pako.gzip(raw);
-  if (gz.length > 64 * 1024) {
-    card.warn.textContent = `⚠ ${Math.round(gz.length / 1024)} КБ — больше лимита Telegram 64 КБ`;
-  } else {
-    card.warn.textContent = `${Math.round(gz.length / 1024)} КБ`;
-  }
-  const blob = new Blob([gz], { type: 'application/gzip' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${state.word}_${card.name}.tgs`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  flash('Скачано: ' + a.download);
+function applyTint(doc) {
+  return state.tint ? ES.tintDoc(doc, state.tintColor) : doc;
 }
 
-const packBox = document.getElementById('pack');
-const cards = [];
-for (const tpl of window.TEMPLATES) {
+function buildPack(tpl) {
+  const doc = ES.replaceSlots(tpl.doc, {
+    word: state.word, color: state.color, size: state.size,
+    stroke: state.stroke, strokeColor: state.strokeColor,
+  }).doc;
+  return applyTint(doc);
+}
+function buildOurs(kind) {
+  return applyTint(ES.OURS[kind](state.word, ES.hexToRgb(state.color)));
+}
+
+const cards = []; // {kind?, tpl?, name, player, warn, loaded, el, sel}
+
+function makeCard(box, name, label, builder) {
   const card = document.createElement('div');
   card.className = 'card';
   const player = document.createElement('lottie-player');
   player.setAttribute('loop', ''); player.setAttribute('autoplay', '');
   const nm = document.createElement('div');
-  nm.className = 'nm'; nm.textContent = tpl.name.slice(0, 24);
+  nm.className = 'nm'; nm.textContent = label;
   const btn = document.createElement('button');
   btn.textContent = 'Скачать .tgs';
   const warn = document.createElement('div'); warn.className = 'warn';
-  btn.addEventListener('click', () => download(rec));
   card.append(player, nm, btn, warn);
-  packBox.appendChild(card);
-  const rec = { tpl, player, name: tpl.name.replace(/[^\w-]+/g, '_').slice(0, 24), warn, loaded: false };
+  box.appendChild(card);
+  const rec = { name, player, warn, builder, loaded: false, el: card, sel: false };
+  btn.addEventListener('click', e => { e.stopPropagation(); download([rec]); });
+  card.addEventListener('click', () => toggleSel(rec));
   cards.push(rec);
+  return rec;
 }
 
-/* lazy: build + play previews only when they scroll into view */
+const OUR_NAMES = { flag:'Флаг', tiles:'Плитки', glitch:'Глитч', spinner:'Спиннер', shield:'Щит',
+  pennant:'Вымпел', cube:'Куб', plate:'Бейдж', heart:'Сердце', gamepad:'Геймпад', bolt:'Молния' };
+const oursBox = document.getElementById('ours');
+for (const kind of Object.keys(OUR_NAMES)) {
+  makeCard(oursBox, kind, OUR_NAMES[kind], () => buildOurs(kind));
+}
+const packBox = document.getElementById('pack');
+const LIMIT = parseInt(new URLSearchParams(location.search).get('n') || '', 10);
+const TPLS = Number.isFinite(LIMIT) ? window.TEMPLATES.slice(0, LIMIT) : window.TEMPLATES;
+for (const tpl of TPLS) {
+  makeCard(packBox, tpl.name.replace(/[^\w-]+/g, '_').slice(0, 24), tpl.name.slice(0, 24), () => buildPack(tpl));
+}
+
+/* selection */
+const selbar = document.getElementById('selbar');
+const selcount = document.getElementById('selcount');
+function toggleSel(rec) {
+  rec.sel = !rec.sel;
+  rec.el.classList.toggle('sel', rec.sel);
+  const n = cards.filter(c => c.sel).length;
+  selcount.textContent = 'Выбрано: ' + n;
+  selbar.classList.toggle('on', n > 0);
+}
+document.getElementById('selclear').addEventListener('click', () => {
+  for (const c of cards) { c.sel = false; c.el.classList.remove('sel'); }
+  selbar.classList.remove('on');
+});
+document.getElementById('dlAll').addEventListener('click', () => {
+  const sel = cards.filter(c => c.sel);
+  if (!sel.length) return;
+  download(sel);
+});
+
+function gzipDoc(doc) {
+  const raw = new TextEncoder().encode(JSON.stringify(doc));
+  return pako.gzip(raw);
+}
+function download(list) {
+  let i = 0;
+  const next = () => {
+    if (i >= list.length) { flash(`Скачано файлов: ${list.length}`); return; }
+    const rec = list[i++];
+    try {
+      const gz = gzipDoc(rec.builder());
+      if (gz.length > 64 * 1024) rec.warn.textContent = `⚠ ${Math.round(gz.length / 1024)} КБ > лимита`;
+      else rec.warn.textContent = `${Math.round(gz.length / 1024)} КБ`;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([gz], { type: 'application/gzip' }));
+      a.download = `${state.word}_${rec.name}.tgs`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    } catch (e) { flash('ERR ' + rec.name + ': ' + e.message, true); }
+    setTimeout(next, 250);
+  };
+  next();
+}
+
+/* lazy previews */
 const io = new IntersectionObserver(entries => {
   for (const en of entries) {
     if (!en.isIntersecting) continue;
@@ -73,32 +127,27 @@ const io = new IntersectionObserver(entries => {
     io.unobserve(en.target);
     if (!rec.loaded) loadCard(rec);
   }
-}, { rootMargin: '300px' });
+}, { rootMargin: '320px' });
 
 function loadCard(rec) {
   rec.loaded = true;
-  try { rec.player.load(JSON.stringify(buildPack(rec.tpl))); }
+  try { rec.player.load(JSON.stringify(rec.builder())); }
   catch (e) { flash('ERR ' + rec.name + ': ' + e.message, true); }
 }
-
 for (const rec of cards) {
-  rec.player.parentElement._rec = rec;
-  io.observe(rec.player.parentElement);
-}
-
-let pending = null;
-function rebuildLoaded() {
-  readState();
-  for (const rec of cards) {
-    if (!rec.loaded) continue;
-    try { rec.player.load(JSON.stringify(buildPack(rec.tpl))); }
-    catch (e) { flash('ERR ' + rec.name + ': ' + e.message, true); }
-  }
-  if (pending) { clearTimeout(pending); pending = null; }
+  rec.el._rec = rec;
+  io.observe(rec.el);
 }
 
 let deb;
-['word', 'color', 'strokeOn', 'strokeColor', 'size'].forEach(id => {
+function rebuildLoaded() {
+  for (const rec of cards) {
+    if (!rec.loaded) continue;
+    try { rec.player.load(JSON.stringify(rec.builder())); }
+    catch (e) { flash('ERR ' + rec.name + ': ' + e.message, true); }
+  }
+}
+['word', 'color', 'strokeOn', 'strokeColor', 'tintOn', 'tintColor', 'size'].forEach(id => {
   document.getElementById(id).addEventListener('input', () => {
     readState();
     clearTimeout(deb);
