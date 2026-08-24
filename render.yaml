@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: emoji-studio
+    runtime: static
+    staticPublishPath: ./
+    headers:
+      - path: /templates.js
+        name: Cache-Control
+        value: public, max-age=0, must-revalidate
