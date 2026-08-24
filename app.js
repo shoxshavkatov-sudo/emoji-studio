@@ -37,9 +37,6 @@ function buildPack(tpl) {
   }).doc;
   return applyTint(doc);
 }
-function buildOurs(kind) {
-  return applyTint(ES.OURS[kind](state.word, ES.hexToRgb(state.color)));
-}
 
 const cards = []; // {kind?, tpl?, name, player, warn, loaded, el, sel}
 
@@ -62,16 +59,8 @@ function makeCard(box, name, label, builder) {
   return rec;
 }
 
-const OUR_NAMES = { flag:'Флаг', tiles:'Плитки', glitch:'Глитч', spinner:'Спиннер', shield:'Щит',
-  pennant:'Вымпел', cube:'Куб', plate:'Бейдж', heart:'Сердце', gamepad:'Геймпад', bolt:'Молния' };
-const oursBox = document.getElementById('ours');
-for (const kind of Object.keys(OUR_NAMES)) {
-  makeCard(oursBox, kind, OUR_NAMES[kind], () => buildOurs(kind));
-}
 const packBox = document.getElementById('pack');
-const LIMIT = parseInt(new URLSearchParams(location.search).get('n') || '', 10);
-const TPLS = Number.isFinite(LIMIT) ? window.TEMPLATES.slice(0, LIMIT) : window.TEMPLATES;
-for (const tpl of TPLS) {
+for (const tpl of window.TEMPLATES) {
   makeCard(packBox, tpl.name.replace(/[^\w-]+/g, '_').slice(0, 24), tpl.name.slice(0, 24), () => buildPack(tpl));
 }
 
