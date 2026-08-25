@@ -7,7 +7,7 @@
 <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js" defer></script>
 <script src="engine.js" defer></script>
-<script src="templates.js" defer></script>
+<script src="manifest.js" defer></script>
 <script src="app.js" defer></script>
 <style>
   :root { color-scheme: dark; --line: rgba(255,255,255,.09); --glass: rgba(20,22,26,.55); }
@@ -30,6 +30,8 @@
   .field input[type=text]:focus { border-color:rgba(255,255,255,.35); }
   .field input[type=color] { width:50px; height:38px; padding:2px; border-radius:11px;
     border:1px solid var(--line); background:rgba(255,255,255,.05); }
+  .field select { padding:9px 10px; font-size:14px; border-radius:11px; border:1px solid var(--line);
+    background:rgba(255,255,255,.05); color:#fff; outline:none; }
   .field input[type=range] { width:150px; accent-color:#fff; }
   .field .val { font-size:12px; color:#fff; }
   .chk { display:flex; align-items:center; gap:7px; font-size:13px; padding-bottom:8px; color:#dfe3e7; }
@@ -46,7 +48,12 @@
     box-shadow:0 0 0 1px #fff, 0 10px 30px rgba(0,0,0,.4); }
   .card.sel::after { content:'✓'; position:absolute; top:8px; right:10px; width:20px; height:20px;
     border-radius:50%; background:#fff; color:#08090b; font-size:12px; line-height:20px; font-weight:700; }
-  .card lottie-player { width:148px; height:148px; display:block; margin:0 auto; filter:grayscale(0%); }
+  .card .stage { position:relative; width:148px; height:148px; margin:0 auto; border-radius:12px;
+    background:rgba(255,255,255,.03); overflow:hidden; }
+  .card .stage img.thumb { width:100%; height:100%; object-fit:contain; display:block; }
+  .card .stage img.nolist { visibility:hidden; }
+  .card lottie-player { position:absolute; inset:0; width:100%; height:100%; display:none; }
+  .card.sel lottie-player { display:block; }
   .card .nm { font-size:11px; margin:6px 0 8px; color:#8b9198; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .card button { width:100%; padding:8px 0; font-size:13px; border-radius:10px; border:1px solid #fff;
     background:#e9ebee; color:#08090b; font-weight:600; cursor:pointer; }
@@ -74,7 +81,7 @@
 <body>
 <header>
   <h1>GRID Emoji Studio</h1>
-  <p>Своё название, цвет и размер → живые превью → .tgs для Telegram (@Stickers → /newemojiset)</p>
+  <p>Кликни по эмодзи → настрой название, шрифт, цвет и размер → скачай .tgs для Telegram (@Stickers → /newemojiset)</p>
 </header>
 
 <div class="controls">
@@ -95,19 +102,27 @@
     <div class="chk"><input type="checkbox" id="tintOn"> <input type="color" id="tintColor" value="#ffffff"></div>
   </div>
   <div class="field">
+    <label>Шрифт</label>
+    <select id="font">
+      <option value="block">Блок</option>
+      <option value="rounded">Скруглённый</option>
+      <option value="outline">Контур</option>
+    </select>
+  </div>
+  <div class="field">
     <label>Размер <span class="val" id="sizeVal">100%</span></label>
     <input type="range" id="size" min="50" max="140" value="100">
   </div>
 </div>
 
 <main>
-  <h2>intervfxpack · 66</h2>
+  <h2>intervfxpack · <span id="tplcount">…</span></h2>
   <div class="grid" id="pack"></div>
 </main>
 
-<div id="selbar"><span id="selcount">Выбрано: 0</span>
-  <button id="dlAll">Скачать выбранные</button>
-  <button id="selclear" class="clear">Снять</button>
+<div id="selbar"><span id="selname">—</span>
+  <button id="dlOne">Скачать .tgs</button>
+  <button id="selclear" class="clear">Снять выбор</button>
 </div>
 <div id="status"></div>
 </body>

@@ -539,11 +539,27 @@ function findStyle(layer) {
   return { fc, sc, sw };
 }
 
-/* build word group fitted into bbox, layer-space.
+/* rounded-rect path (8 vertices with bezier handles) */
+function roundedRectShape(x0, y0, x1, y1, rr) {
+  const k = 0.5523 * rr;
+  const d = [
+    [x0 + rr, y0, -k, 0, k, 0],
+    [x1 - rr, y0, -k, 0, k, 0],
+    [x1, y0 + rr, 0, -k, 0, k],
+    [x1, y1 - rr, 0, -k, 0, k],
+    [x1 - rr, y1, k, 0, -k, 0],
+    [x0 + rr, y1, k, 0, -k, 0],
+    [x0, y1 - rr, 0, k, 0, -k],
+    [x0, y0 + rr, 0, k, 0, -k],
+  ];
+  return { v: d.map(a => [a[0], a[1]]), i: d.map(a => [a[2], a[3]]), o: d.map(a => [a[4], a[5]]), c: true };
+}
+
+/* build word group fitted into bbox, layer-space. style: block|rounded|outline.
  * rlottie-safe: letters are plain sh paths with scale/rotation baked into
  * coordinates (no rc rects, no group scaling) — mirrors the geometry style of
  * the original logo that renders fine in Telegram. */
-function wordGroupForBBox(word, bbox, color, sizeMult, useStroke, strokeColor) {
+function wordGroupForBBox(word, bbox, color, sizeMult, useStroke, strokeColor, style) {
   const [x0, y0, x1, y1] = bbox;
   const bw = x1 - x0, bh = y1 - y0;
   const { letters, wCells } = layoutWord(word);
@@ -553,22 +569,55 @@ function wordGroupForBBox(word, bbox, color, sizeMult, useStroke, strokeColor) {
   const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
   const rot = vertical ? Math.PI / 2 : 0;
   const cos = Math.cos(rot), sin = Math.sin(rot);
+  const R = 100;
+  const tp = (px, py) => [Math.round((cx + (px * cos - py * sin) * s) * R) / R,
+                          Math.round((cy + (px * sin + py * cos) * s) * R) / R];
+  const rotOff = (ox, oy) => [Math.round((ox * cos - oy * sin) * s * R) / R,
+                              Math.round((ox * sin + oy * cos) * s * R) / R];
   const items = [];
+  const outline = style === 'outline';
   for (const { ch, x } of letters) {
     const g = glyphOf(ch);
     for (let r = 1; r < g.length; r++) {
       const [c, row, wc, hr] = g[r];
       const rx = x + c - wCells / 2, ry = row - 2.5;
-      const corners = [[rx, ry], [rx + wc, ry], [rx + wc, ry + hr], [rx, ry + hr]];
-      const v = corners.map(([px, py]) => [
-        Math.round((cx + (px * cos - py * sin) * s) * 100) / 100,
-        Math.round((cy + (px * sin + py * cos) * s) * 100) / 100,
-      ]);
-      items.push({ ty: 'sh', ks: st({ i: [[0, 0], [0, 0], [0, 0], [0, 0]], o: [[0, 0], [0, 0], [0, 0], [0, 0]], v, c: true }) });
+      let shape;
+      if (style === 'rounded') {
+        let rr = Math.min(wc, hr) * 0.35; // corner radius, cell units
+        const edgeW = wc - 2 * rr, edgeH = hr - 2 * rr;
+        if (edgeW <= 0.08 || edgeH <= 0.08) {
+          // too small to round: clamp radius to keep straight edges positive
+          rr = Math.min(wc, hr) / 2 * 0.46;
+        }
+        // bezier handle must never exceed half of the straight edge,
+        // otherwise the curve folds over itself and the shape collapses
+        const k = Math.max(0, Math.min(0.5523 * rr, (wc - 2 * rr) / 2, (hr - 2 * rr) / 2));
+        const raw = roundedRectShape(rx, ry, rx + wc, ry + hr, rr);
+        shape = { v: raw.v.map(p => tp(p[0], p[1])), c: true };
+        const defs = [
+          [-k, 0, k, 0], [-k, 0, k, 0], [0, -k, 0, k], [0, -k, 0, k],
+          [k, 0, -k, 0], [k, 0, -k, 0], [0, k, 0, -k], [0, k, 0, -k],
+        ];
+        shape.i = defs.map(dd => rotOff(dd[0], dd[1]));
+        shape.o = defs.map(dd => rotOff(dd[2], dd[3]));
+      } else {
+        const corners = [[rx, ry], [rx + wc, ry], [rx + wc, ry + hr], [rx, ry + hr]];
+        shape = {
+          v: corners.map(p => tp(p[0], p[1])),
+          i: [[0, 0], [0, 0], [0, 0], [0, 0]],
+          o: [[0, 0], [0, 0], [0, 0], [0, 0]],
+          c: true,
+        };
+      }
+      items.push({ ty: 'sh', nm: 'gl', ks: st(shape) });
     }
   }
-  items.push(fill(color));
-  if (useStroke) items.push(stroke(strokeColor || BLACK, 3));
+  if (outline) {
+    items.push(stroke(color, Math.max(1.2, 0.22 * s)));
+  } else {
+    items.push(fill(color));
+    if (useStroke) items.push(stroke(strokeColor || BLACK, 3));
+  }
   return group('NAME', items, trspec());
 }
 
@@ -578,6 +627,7 @@ function replaceSlots(baseDoc, opts) {
   const sizeMult = opts.size != null ? Number(opts.size) : 1.0;
   const useStroke = !!opts.stroke;
   const strokeColor = opts.strokeColor ? hexToRgb(opts.strokeColor) : BLACK;
+  const style = opts.font || 'block';
   let replaced = 0;
   const lists = [data.layers || []];
   for (const a of data.assets || []) if (a && a.layers) lists.push(a.layers);
@@ -588,7 +638,7 @@ function replaceSlots(baseDoc, opts) {
       const pts = collectPoints(l.shapes || []);
       if (pts.length < 3) continue;
       const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-      l.shapes = [wordGroupForBBox(opts.word || 'GRID', [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], color, sizeMult, useStroke, strokeColor)];
+      l.shapes = [wordGroupForBBox(opts.word || 'GRID', [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], color, sizeMult, useStroke, strokeColor, style)];
       replaced++;
     }
   }
@@ -633,9 +683,43 @@ function tintDoc(docData, hex) {
   return docData;
 }
 
+/* overlay mode for slotless templates: word on a rounded pill, bottom-center,
+ * added as a new top layer */
+function overlayWord(baseDoc, opts) {
+  const data = JSON.parse(JSON.stringify(baseDoc));
+  const W = data.w || 512, H = data.h || 512;
+  const color = hexToRgb(opts.color);
+  const bw = Math.min(420, W * 0.82);
+  const bh = Math.min(120, H * 0.22);
+  // layer has p=[0,0] so shape coords are comp coords: center around (W/2, H/2)
+  const cx = W / 2, cy = H / 2 + bh / 2 - 14;
+  const bbox = [cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2];
+  const word = wordGroupForBBox(opts.word || 'GRID', bbox, color,
+    opts.size != null ? Number(opts.size) : 1.0, !!opts.stroke,
+    opts.strokeColor ? hexToRgb(opts.strokeColor) : BLACK, opts.font || 'block');
+  // backing pill around the same bbox
+  const pad = 14;
+  const pill = roundedRectShape(bbox[0] - pad, bbox[1] - pad / 2, bbox[2] + pad, bbox[3] + pad / 2, 18);
+  const layer = {
+    ddd: 0, ind: 1, ty: 4, nm: 'NAME_OVERLAY', sr: 1,
+    ks: { o: st(100), r: st(0), p: st([0, 0, 0]), a: st([0, 0, 0]), s: st([100, 100, 100]) },
+    ao: 0,
+    shapes: [
+      word,
+      { ty: 'gr', nm: 'pill', it: [
+        { ty: 'sh', ks: st(pill) },
+        fill(BLACK, 78), stroke(WHITE, 4), trspec(),
+      ] },
+    ],
+    ip: 0, op: data.op || 60, st: 0,
+  };
+  data.layers.unshift(layer);
+  return data;
+}
+
 root.ES = {
   FONT, layoutWord, wordRects, letterGroups, pickCell,
-  OURS, replaceSlots, tintDoc, hexToRgb, doc,
+  OURS, replaceSlots, tintDoc, overlayWord, hexToRgb, doc,
 };
 
 })(typeof window !== 'undefined' ? window : globalThis);
