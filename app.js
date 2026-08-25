@@ -32,10 +32,72 @@ function buildDoc(rec) {
   const opts = {
     word: state.word, color: state.color, size: state.size,
     stroke: state.stroke, strokeColor: state.strokeColor, font: state.font,
+    logo: state.logo || null,
   };
   const doc = ES.replaceSlots(rec.base, opts).doc;
   return state.tint ? ES.tintDoc(doc, state.tintColor) : doc;
 }
+
+/* logo upload: decode image, downsample to a color grid (quantized) */
+function imageToGrid(file, cb) {
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  img.onload = () => {
+    const gh = 26; // grid height; width follows aspect
+    const gw = Math.max(1, Math.min(64, Math.round(img.width / img.height * gh)));
+    const cv = document.createElement('canvas');
+    cv.width = gw; cv.height = gh;
+    const ctx = cv.getContext('2d');
+    ctx.drawImage(img, 0, 0, gw, gh);
+    const data = ctx.getImageData(0, 0, gw, gh).data;
+    const grid = [];
+    for (let y = 0; y < gh; y++) {
+      const row = [];
+      for (let x = 0; x < gw; x++) {
+        const i = (y * gw + x) * 4;
+        const a = data[i + 3];
+        if (a < 120) { row.push(null); continue; }
+        // quantize channels to 8 steps to merge similar colors into runs
+        row.push([
+          (data[i] >> 5) << 5,
+          (data[i + 1] >> 5) << 5,
+          (data[i + 2] >> 5) << 5,
+        ]);
+      }
+      grid.push(row);
+    }
+    URL.revokeObjectURL(url);
+    cb(grid);
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); flash('Не удалось прочитать картинку', true); };
+  img.src = url;
+}
+document.getElementById('logoFile').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  imageToGrid(f, grid => {
+    state.logo = grid;
+    document.getElementById('logoClear').style.display = '';
+    flash('Логотип применён — он заменит текст');
+    clearTimeout(deb);
+    deb = setTimeout(() => {
+      if (selected && selected.base) {
+        rebuildOne(selected);
+        if (step >= 2) bigLoad();
+      }
+    }, 200);
+  });
+});
+document.getElementById('logoClear').addEventListener('click', () => {
+  state.logo = null;
+  document.getElementById('logoFile').value = '';
+  document.getElementById('logoClear').style.display = 'none';
+  flash('Логотип убран — снова текст');
+  if (selected && selected.base) {
+    rebuildOne(selected);
+    if (step >= 2) bigLoad();
+  }
+});
 
 async function loadDoc(rec) {
   const buf = await (await fetch('tpl/' + rec.i + '.tgs')).arrayBuffer();

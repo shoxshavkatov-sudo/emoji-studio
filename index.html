@@ -6,9 +6,9 @@
 <title>Emoji Studio</title>
 <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js" defer></script>
-<script src="engine.js?v=6" defer></script>
-<script src="manifest.js?v=6" defer></script>
-<script src="app.js?v=6" defer></script>
+<script src="engine.js?v=7" defer></script>
+<script src="manifest.js?v=7" defer></script>
+<script src="app.js?v=7" defer></script>
 <style>
   :root { color-scheme: dark; --line: rgba(255,255,255,.09); --glass: rgba(20,22,26,.62); }
   * { box-sizing: border-box; }
@@ -150,9 +150,17 @@
           </div>
         </div>
         <div class="group" style="grid-column:1 / -1;">
-          <h3>Размер текста</h3>
+          <h3>Логотип</h3>
           <div class="field">
-            <label for="size">Масштаб <span class="val" id="sizeVal">100%</span></label>
+            <label for="logoFile">Своя картинка — заменит текст в эмодзи</label>
+            <input type="file" id="logoFile" accept="image/*" style="color:#c9ced3;font-size:12px;">
+          </div>
+          <button class="linkbtn" id="logoClear" style="display:none;">Убрать логотип</button>
+        </div>
+        <div class="group" style="grid-column:1 / -1;">
+          <h3>Размер</h3>
+          <div class="field">
+            <label for="size">Масштаб текста/логотипа <span class="val" id="sizeVal">100%</span></label>
             <input type="range" id="size" min="50" max="140" value="100">
           </div>
         </div>

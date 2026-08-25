@@ -390,7 +390,10 @@ function replaceSlots(baseDoc, opts) {
       const pts = collectPoints(l.shapes || []);
       if (pts.length < 3) continue;
       const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-      l.shapes = [wordGroupForBBox(opts.word || 'GRID', [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], color, sizeMult, useStroke, strokeColor, style)];
+      const bbox = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+      l.shapes = opts.logo
+        ? logoGroupsForBBox(opts.logo, bbox, sizeMult)
+        : [wordGroupForBBox(opts.word || 'GRID', bbox, color, sizeMult, useStroke, strokeColor, style)];
       replaced++;
     }
   }
@@ -422,7 +425,7 @@ function tintDoc(docData, hex) {
         if (it.c) it.c.k = recolor(it.c.k);
       } else if (it.ty === 'gr') {
         const nm = String(it.nm || '');
-        if (nm === 'NAME' || nm.startsWith('l_') || nm === 't') continue;
+        if (nm === 'NAME' || nm === 'lg' || nm.startsWith('l_') || nm === 't') continue;
         walkItems(it.it);
       }
     }
@@ -435,6 +438,47 @@ function tintDoc(docData, hex) {
   return docData;
 }
 
-root.ES = { FONT, layoutWord, glyphOf, replaceSlots, tintDoc, hexToRgb };
+/* logo as vector mosaic: pixels = rows of [r,g,b] or null (transparent).
+ * Horizontal runs of the same color become baked sh paths (rlottie-safe). */
+function logoGroupsForBBox(pixels, bbox, sizeMult) {
+  const [x0, y0, x1, y1] = bbox;
+  const bw = x1 - x0, bh = y1 - y0;
+  const gh = pixels.length;
+  const gw = Math.max(1, ...pixels.map(r => r.length));
+  const s = Math.min(bw / gw, bh / gh) * sizeMult;
+  const ox = (x0 + x1) / 2 - gw * s / 2;
+  const oy = (y0 + y1) / 2 - gh * s / 2;
+  const R = 100;
+  const groups = [];
+  for (let y = 0; y < gh; y++) {
+    let run = null;
+    const flush = () => {
+      if (!run) return;
+      const v = [
+        [run.x1 * s + ox, y * s + oy], [run.x2 * s + ox, y * s + oy],
+        [run.x2 * s + ox, (y + 1) * s + oy], [run.x1 * s + ox, (y + 1) * s + oy],
+      ].map(p => [Math.round(p[0] * R) / R, Math.round(p[1] * R) / R]);
+      groups.push({ ty: 'gr', nm: 'lg', it: [
+        { ty: 'sh', ks: st({ i: [[0, 0], [0, 0], [0, 0], [0, 0]], o: [[0, 0], [0, 0], [0, 0], [0, 0]], v, c: true }) },
+        fill([run.c[0] / 255, run.c[1] / 255, run.c[2] / 255, 1]),
+        trspec(),
+      ] });
+      run = null;
+    };
+    for (let x = 0; x <= gw; x++) {
+      const px = (x < gw && pixels[y][x]) ? pixels[y][x] : null;
+      if (run && px && px[0] === run.c[0] && px[1] === run.c[1] && px[2] === run.c[2]) {
+        run.x2 = x + 1;
+      } else {
+        flush();
+        run = px ? { c: px, x1: x, x2: x + 1 } : null;
+      }
+    }
+    flush();
+  }
+  return groups;
+}
+
+root.ES = { FONT, layoutWord, glyphOf, replaceSlots, tintDoc, hexToRgb, logoGroupsForBBox };
 
 })(typeof window !== 'undefined' ? window : globalThis);
