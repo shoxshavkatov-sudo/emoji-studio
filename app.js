@@ -111,6 +111,9 @@ async function ensurePlaying(rec) {
     rec.player.setAttribute('loop', '');
     rec.player.setAttribute('autoplay', '');
     rec.stage.appendChild(rec.player);
+    // lottie-player (Lit) mounts its shadow DOM asynchronously: a load() in
+    // the same tick is silently dropped — give it a beat first
+    await new Promise(r => setTimeout(r, 150));
   }
   rebuildOne(rec);
 }
