@@ -103,7 +103,9 @@ function rebuildOne(rec) {
   catch (e) { flash('ERR ' + rec.name + ': ' + e.message, true); }
 }
 
-/* animate every card as it approaches the viewport */
+/* animate every card: background queue loads templates one by one
+ * (IntersectionObserver callbacks proved unreliable in some webviews,
+ * so we don't depend on them); scrolling moves visible cards to the front */
 async function ensurePlaying(rec) {
   if (!rec.base) await loadDoc(rec);
   if (!rec.player) {
@@ -117,18 +119,26 @@ async function ensurePlaying(rec) {
   }
   rebuildOne(rec);
 }
-const io = new IntersectionObserver(entries => {
-  for (const en of entries) {
-    if (!en.isIntersecting) continue;
-    const rec = en.target._rec;
-    io.unobserve(en.target);
-    ensurePlaying(rec).catch(() => {});
+const queue = cards.slice();
+let pumping = false;
+async function pump() {
+  if (pumping) return;
+  pumping = true;
+  while (queue.length) {
+    const rec = queue.shift();
+    try { await ensurePlaying(rec); } catch (e) { /* keep going */ }
+    await new Promise(r => setTimeout(r, 60));
   }
-}, { rootMargin: '350px' });
-for (const rec of cards) {
-  rec.el._rec = rec;
-  io.observe(rec.el);
+  pumping = false;
 }
+setTimeout(pump, 400);
+window.addEventListener('scroll', () => {
+  const vh = window.innerHeight;
+  for (let i = queue.length - 1; i >= 0; i--) {
+    const r = queue[i].el.getBoundingClientRect();
+    if (r.bottom > 0 && r.top < vh) queue.unshift(queue.splice(i, 1)[0]);
+  }
+}, { passive: true });
 
 /* download */
 function downloadSelected() {
