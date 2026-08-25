@@ -65,9 +65,11 @@ for (const m of window.MANIFEST) {
   const warn = document.createElement('div'); warn.className = 'warn';
   card.append(stage, nm, btn, warn);
   packBox.appendChild(card);
-  const rec = { i: m.i, name: m.n.replace(/[^\w-]+/g, '_').slice(0, 24) || 'emoji', el: card, stage, warn, base: null, player: null, loadedOnce: false };
+  const rec = { i: m.i, name: m.n.replace(/[^\w-]+/g, '_').slice(0, 24) || 'emoji', el: card, stage, warn, base: null, player: null, loadedOnce: false, hovering: false };
   btn.addEventListener('click', async e => { e.stopPropagation(); await select(rec, true); download([rec]); });
   card.addEventListener('click', () => select(rec));
+  card.addEventListener('mouseenter', () => previewOn(rec));
+  card.addEventListener('mouseleave', () => previewOff(rec));
   cards.push(rec);
 }
 
@@ -113,6 +115,23 @@ function deselect() {
   selected = null;
   selbar.classList.remove('on');
   unmountPlayers(null);
+}
+
+/* hover preview: animate the card under the cursor; the selected card keeps playing */
+async function previewOn(rec) {
+  rec.hovering = true;
+  if (selected === rec || !rec.hovering) return;
+  try {
+    if (!rec.base) await loadDoc(rec);
+  } catch (e) { return; }
+  if (selected === rec || !rec.hovering) return;
+  mountPlayer(rec);
+  unmountPlayers(rec);
+  rebuildOne(rec);
+}
+function previewOff(rec) {
+  rec.hovering = false;
+  if (selected !== rec && rec.player) rec.player.style.display = 'none';
 }
 document.getElementById('selclear').addEventListener('click', deselect);
 document.getElementById('dlOne').addEventListener('click', () => { if (selected) download([selected]); });
