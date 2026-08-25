@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset="utf-8">
+<script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+<script src="engine.js?v=4"></script>
+</head><body>
+<div id="log" style="color:#fff;font-family:monospace;font-size:13px;white-space:pre"></div>
+<div id="stage" style="width:200px;height:200px"></div>
+<div id="target" style="height:10px"></div>
+<script>
+const log = m => document.getElementById('log').textContent += '\n' + m;
+log('IO: ' + typeof IntersectionObserver);
+log('pako: ' + typeof window.pako);
+log('ES: ' + typeof window.ES);
+log('LP: ' + typeof customElements.get('lottie-player'));
+window.addEventListener('load', async () => {
+  try {
+    const r = await fetch('tpl/003.tgs');
+    log('fetch: ' + r.status + ' bytes=' + (await r.clone().arrayBuffer()).byteLength);
+    const buf = await r.arrayBuffer();
+    const doc = ES.replaceSlots(JSON.parse(pako.ungzip(new Uint8Array(buf), { to: 'string' })), { word: 'ГРИД', color: '#ffffff', size: 1 });
+    const p = document.createElement('lottie-player');
+    p.setAttribute('loop', ''); p.setAttribute('autoplay', '');
+    document.getElementById('stage').appendChild(p);
+    await new Promise(r2 => setTimeout(r2, 300));
+    p.load(JSON.stringify(doc.doc));
+    setTimeout(() => {
+      const sr = p.shadowRoot;
+      log('svg: ' + (sr && sr.querySelector('svg') ? 'YES' : 'no') + ' shadow: ' + (sr ? 'yes' : 'no'));
+    }, 2000);
+  } catch (e) { log('THREW: ' + e.message); }
+});
+if (typeof IntersectionObserver === 'function') {
+  new IntersectionObserver(es => {
+    log('io fired: ' + es.map(e => e.isIntersecting).join(','));
+  }).observe(document.getElementById('target'));
+}
+</script></body></html>
