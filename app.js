@@ -1,5 +1,5 @@
-/* Emoji Studio app: manifest-driven, one live player at a time.
- * Thumbs are lazy <img>; the doc (.tgs) is fetched only when a card is selected. */
+/* Emoji Studio app: all cards animate as they enter the viewport;
+ * bottom bar = 1 select → 2 style → 3 download. Settings apply to the selected card only. */
 (function () {
 'use strict';
 
@@ -42,60 +42,39 @@ async function loadDoc(rec) {
   rec.base = JSON.parse(pako.ungzip(new Uint8Array(buf), { to: 'string' }));
 }
 
-/* cards */
+/* cards: static thumb behind, live player on top once visible */
 const cards = [];
 const packBox = document.getElementById('pack');
 document.getElementById('tplcount').textContent = window.MANIFEST.length;
 for (const m of window.MANIFEST) {
   const card = document.createElement('div');
   card.className = 'card';
+  const stage = document.createElement('div');
+  stage.className = 'stage';
   const thumb = document.createElement('img');
   thumb.className = 'thumb';
   thumb.loading = 'lazy';
   thumb.src = 'thumbs/' + m.i + '.png';
   thumb.alt = '';
-  thumb.addEventListener('error', () => { thumb.classList.add('nolist'); });
-  const stage = document.createElement('div');
-  stage.className = 'stage';
+  thumb.addEventListener('error', () => thumb.classList.add('nolist'));
   stage.appendChild(thumb);
   const nm = document.createElement('div');
   nm.className = 'nm'; nm.textContent = m.n;
-  const btn = document.createElement('button');
-  btn.textContent = 'Скачать .tgs';
   const warn = document.createElement('div'); warn.className = 'warn';
-  card.append(stage, nm, btn, warn);
+  card.append(stage, nm, warn);
   packBox.appendChild(card);
-  const rec = { i: m.i, name: m.n.replace(/[^\w-]+/g, '_').slice(0, 24) || 'emoji', el: card, stage, warn, base: null, player: null, loadedOnce: false, hovering: false };
-  btn.addEventListener('click', async e => { e.stopPropagation(); await select(rec, true); download([rec]); });
+  const rec = { i: m.i, name: m.n.replace(/[^\w-]+/g, '_').slice(0, 24) || 'emoji', el: card, stage, warn, base: null, player: null };
   card.addEventListener('click', () => select(rec));
-  card.addEventListener('mouseenter', () => previewOn(rec));
-  card.addEventListener('mouseleave', () => previewOff(rec));
   cards.push(rec);
 }
 
-/* single selection: exactly one live player */
+/* selection */
 let selected = null;
-const selbar = document.getElementById('selbar');
 const selname = document.getElementById('selname');
 
-function mountPlayer(rec) {
-  if (!rec.player) {
-    rec.player = document.createElement('lottie-player');
-    rec.player.setAttribute('loop', '');
-    rec.player.setAttribute('autoplay', '');
-    rec.stage.appendChild(rec.player);
-  }
-  rec.player.style.display = 'block';
-}
-function unmountPlayers(except) {
-  for (const c of cards) {
-    if (c !== except && c.player) c.player.style.display = 'none';
-  }
-}
-
-async function select(rec, silent) {
+async function select(rec) {
   try {
-    if (!rec.base) await loadDoc(rec);
+    if (!rec.base) await ensurePlaying(rec);
   } catch (e) {
     flash('Не удалось загрузить шаблон: ' + e.message, true);
     return;
@@ -104,64 +83,65 @@ async function select(rec, silent) {
   selected = rec;
   rec.el.classList.add('sel');
   selname.textContent = state.word + ' · ' + rec.name;
-  selbar.classList.add('on');
-  mountPlayer(rec);
-  unmountPlayers(rec);
   rebuildOne(rec);
-  if (!silent) rec.el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  rec.el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 function deselect() {
   if (selected) selected.el.classList.remove('sel');
   selected = null;
-  selbar.classList.remove('on');
-  unmountPlayers(null);
-}
-
-/* hover preview: animate the card under the cursor; the selected card keeps playing */
-async function previewOn(rec) {
-  rec.hovering = true;
-  if (selected === rec || !rec.hovering) return;
-  try {
-    if (!rec.base) await loadDoc(rec);
-  } catch (e) { return; }
-  if (selected === rec || !rec.hovering) return;
-  mountPlayer(rec);
-  unmountPlayers(rec);
-  rebuildOne(rec);
-}
-function previewOff(rec) {
-  rec.hovering = false;
-  if (selected !== rec && rec.player) rec.player.style.display = 'none';
+  selname.textContent = 'выбери карточку';
 }
 document.getElementById('selclear').addEventListener('click', deselect);
-document.getElementById('dlOne').addEventListener('click', () => { if (selected) download([selected]); });
+document.getElementById('dlOne').addEventListener('click', () => {
+  if (selected) downloadSelected();
+  else flash('Сначала выбери эмодзи — шаг 1', true);
+});
 
 function rebuildOne(rec) {
-  try {
-    rec.player.load(JSON.stringify(buildDoc(rec)));
-    rec.loadedOnce = true;
-  } catch (e) { flash('ERR ' + rec.name + ': ' + e.message, true); }
+  if (!rec.player || !rec.base) return;
+  try { rec.player.load(JSON.stringify(buildDoc(rec))); }
+  catch (e) { flash('ERR ' + rec.name + ': ' + e.message, true); }
 }
 
-function download(list) {
-  let i = 0;
-  const next = () => {
-    if (i >= list.length) { flash('Скачано файлов: ' + list.length); return; }
-    const rec = list[i++];
-    try {
-      const raw = new TextEncoder().encode(JSON.stringify(buildDoc(rec)));
-      const gz = pako.gzip(raw);
-      if (gz.length > 64 * 1024) rec.warn.textContent = `⚠ ${Math.round(gz.length / 1024)} КБ > лимита`;
-      else rec.warn.textContent = `${Math.round(gz.length / 1024)} КБ`;
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([gz], { type: 'application/gzip' }));
-      a.download = `${state.word}_${rec.name}.tgs`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    } catch (e) { flash('ERR ' + rec.name + ': ' + e.message, true); }
-    setTimeout(next, 250);
-  };
-  next();
+/* animate every card as it approaches the viewport */
+async function ensurePlaying(rec) {
+  if (!rec.base) await loadDoc(rec);
+  if (!rec.player) {
+    rec.player = document.createElement('lottie-player');
+    rec.player.setAttribute('loop', '');
+    rec.player.setAttribute('autoplay', '');
+    rec.stage.appendChild(rec.player);
+  }
+  rebuildOne(rec);
+}
+const io = new IntersectionObserver(entries => {
+  for (const en of entries) {
+    if (!en.isIntersecting) continue;
+    const rec = en.target._rec;
+    io.unobserve(en.target);
+    ensurePlaying(rec).catch(() => {});
+  }
+}, { rootMargin: '350px' });
+for (const rec of cards) {
+  rec.el._rec = rec;
+  io.observe(rec.el);
+}
+
+/* download */
+function downloadSelected() {
+  const rec = selected;
+  try {
+    const raw = new TextEncoder().encode(JSON.stringify(buildDoc(rec)));
+    const gz = pako.gzip(raw);
+    if (gz.length > 64 * 1024) rec.warn.textContent = `⚠ ${Math.round(gz.length / 1024)} КБ > лимита`;
+    else rec.warn.textContent = `${Math.round(gz.length / 1024)} КБ`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([gz], { type: 'application/gzip' }));
+    a.download = `${state.word}_${rec.name}.tgs`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    flash('Скачано: ' + a.download);
+  } catch (e) { flash('ERR ' + rec.name + ': ' + e.message, true); }
 }
 
 let deb;
@@ -171,8 +151,8 @@ let deb;
     if (selected) selname.textContent = state.word + ' · ' + selected.name;
     clearTimeout(deb);
     deb = setTimeout(() => {
-      if (selected && selected.base) rebuildOne(selected);
-      else flash('Сначала выбери эмодзи — кликни по карточке');
+      if (selected) rebuildOne(selected);
+      else flash('Сначала выбери эмодзи — шаг 1');
     }, 400);
   });
 });
