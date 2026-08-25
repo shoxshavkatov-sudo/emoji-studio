@@ -33,7 +33,7 @@ function buildDoc(rec) {
     word: state.word, color: state.color, size: state.size,
     stroke: state.stroke, strokeColor: state.strokeColor, font: state.font,
   };
-  const doc = rec.slot ? ES.replaceSlots(rec.base, opts).doc : ES.overlayWord(rec.base, opts);
+  const doc = ES.replaceSlots(rec.base, opts).doc;
   return state.tint ? ES.tintDoc(doc, state.tintColor) : doc;
 }
 
@@ -59,13 +59,13 @@ for (const m of window.MANIFEST) {
   stage.className = 'stage';
   stage.appendChild(thumb);
   const nm = document.createElement('div');
-  nm.className = 'nm'; nm.textContent = (m.slot ? '' : '◆ ') + m.n;
+  nm.className = 'nm'; nm.textContent = m.n;
   const btn = document.createElement('button');
   btn.textContent = 'Скачать .tgs';
   const warn = document.createElement('div'); warn.className = 'warn';
   card.append(stage, nm, btn, warn);
   packBox.appendChild(card);
-  const rec = { i: m.i, name: m.n.replace(/[^\w-]+/g, '_').slice(0, 24) || 'emoji', slot: !!m.s, el: card, stage, warn, base: null, player: null, loadedOnce: false };
+  const rec = { i: m.i, name: m.n.replace(/[^\w-]+/g, '_').slice(0, 24) || 'emoji', el: card, stage, warn, base: null, player: null, loadedOnce: false };
   btn.addEventListener('click', async e => { e.stopPropagation(); await select(rec, true); download([rec]); });
   card.addEventListener('click', () => select(rec));
   cards.push(rec);
