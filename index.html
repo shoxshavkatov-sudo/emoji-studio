@@ -3,28 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GRID Emoji Studio</title>
+<title>Emoji Studio</title>
 <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js" defer></script>
-<script src="engine.js?v=5" defer></script>
-<script src="manifest.js?v=5" defer></script>
-<script src="app.js?v=5" defer></script>
+<script src="engine.js?v=6" defer></script>
+<script src="manifest.js?v=6" defer></script>
+<script src="app.js?v=6" defer></script>
 <style>
   :root { color-scheme: dark; --line: rgba(255,255,255,.09); --glass: rgba(20,22,26,.62); }
   * { box-sizing: border-box; }
   body { margin:0; background:#08090b; color:#c9ced3; font-family:-apple-system,'Segoe UI',sans-serif;
-    background-image:radial-gradient(1200px 500px at 50% -10%, #17181c 0%, #08090b 60%); padding-bottom:190px; }
-  header { padding:22px 30px 8px; text-align:center; }
-  h1 { color:#fff; font-size:24px; margin:0 0 4px; }
+    background-image:radial-gradient(1100px 460px at 50% -10%, #17181c 0%, #08090b 60%);
+    min-height:100vh; padding-bottom:120px; }
+  header { padding:26px 30px 6px; text-align:center; }
+  h1 { color:#fff; font-size:26px; margin:0 0 4px; letter-spacing:.02em; }
   header p { margin:0; font-size:13px; color:#8b9198; }
 
-  main { padding:16px 30px 40px; }
-  h2 { color:#e8ebee; font-size:13px; margin:18px 0 12px; text-transform:uppercase; letter-spacing:.12em; text-align:center; }
+  main { padding:14px 30px 30px; max-width:1200px; margin:0 auto; }
+  .step { display:none; animation:fadein .25s ease; }
+  .step.active { display:block; }
+  @keyframes fadein { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+  h2 { color:#e8ebee; font-size:13px; margin:16px 0 14px; text-transform:uppercase; letter-spacing:.12em; text-align:center; }
+
+  /* step 1: card grid */
   .grid { display:flex; flex-wrap:wrap; gap:14px; justify-content:center; }
   .card { background:rgba(255,255,255,.028); border:1px solid var(--line); border-radius:16px;
     padding:10px; text-align:center; width:158px; cursor:pointer; position:relative;
-    transition:border-color .15s, background .15s; }
-  .card:hover { background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.22); }
+    transition:border-color .15s, background .15s, transform .15s; }
+  .card:hover { background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.22); transform:translateY(-2px); }
   .card.sel { border-color:#fff; background:rgba(255,255,255,.09);
     box-shadow:0 0 0 1px #fff, 0 10px 30px rgba(0,0,0,.4); }
   .card.sel::after { content:'✓'; position:absolute; top:7px; right:9px; width:20px; height:20px;
@@ -35,102 +41,145 @@
   .card .stage img.nolist { visibility:hidden; }
   .card lottie-player { position:absolute; inset:0; width:100%; height:100%; }
   .card .nm { font-size:10px; margin-top:7px; color:#8b9198; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .card .warn { color:#b9c0c7; font-size:10px; min-height:12px; margin-top:3px; }
 
-  /* bottom glass constructor bar: 1 select → 2 style → 3 download */
+  /* step 2: preview + panel with grouped sections */
+  .studio { display:flex; gap:22px; flex-wrap:wrap; justify-content:center; align-items:flex-start; }
+  .previewbox { flex:0 0 320px; background:rgba(255,255,255,.028); border:1px solid var(--line);
+    border-radius:20px; padding:22px; text-align:center; }
+  #big { width:276px; height:276px; margin:0 auto; background:rgba(255,255,255,.03); border-radius:16px; }
+  .previewbox .selname { margin-top:14px; color:#fff; font-size:14px; }
+  .panel { flex:1 1 420px; max-width:640px; display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .group { background:rgba(255,255,255,.028); border:1px solid var(--line); border-radius:16px; padding:16px; }
+  .group h3 { margin:0 0 12px; font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:#8b9198; }
+  .field { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
+  .field:last-child { margin-bottom:0; }
+  .field label { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:#787f87; }
+  .field input[type=text] { width:100%; padding:10px 12px; font-size:16px; border-radius:11px;
+    border:1px solid var(--line); background:rgba(255,255,255,.05); color:#fff; outline:none; }
+  .field input[type=text]:focus { border-color:rgba(255,255,255,.35); }
+  .field select { width:100%; padding:10px 8px; font-size:14px; border-radius:11px; border:1px solid var(--line);
+    background:rgba(255,255,255,.05); color:#fff; outline:none; }
+  .field input[type=color] { width:100%; height:40px; padding:2px; border-radius:11px;
+    border:1px solid var(--line); background:rgba(255,255,255,.05); }
+  .field input[type=range] { width:100%; accent-color:#fff; }
+  .field .val { font-size:12px; color:#fff; }
+  .chk { display:flex; align-items:center; gap:8px; font-size:13px; color:#dfe3e7; }
+  .chk input[type=checkbox] { accent-color:#fff; width:15px; height:15px; }
+
+  /* step 3 */
+  .finale { display:flex; flex-direction:column; align-items:center; gap:18px; }
+  #big3 { width:320px; height:320px; background:rgba(255,255,255,.03); border-radius:20px; }
+  .fileinfo { color:#c9ced3; font-size:14px; text-align:center; line-height:1.7; }
+  .fileinfo b { color:#fff; }
+  #dlBig { padding:16px 44px; border-radius:16px; border:1px solid #fff; background:#fff; color:#08090b;
+    font-size:17px; font-weight:800; cursor:pointer; }
+  #dlBig:hover { background:#e9ebee; }
+  .linkbtn { background:none; border:none; color:#8b9198; text-decoration:underline; cursor:pointer; font-size:13px; }
+
+  /* bottom nav bar */
   #bar { position:fixed; left:14px; right:14px; bottom:14px; z-index:30; display:flex; align-items:center;
-    gap:18px; padding:14px 20px; border-radius:22px; flex-wrap:wrap; justify-content:center;
+    gap:14px; padding:12px 18px; border-radius:20px;
     background:var(--glass); -webkit-backdrop-filter:blur(26px) saturate(170%); backdrop-filter:blur(26px) saturate(170%);
     border:1px solid var(--line); box-shadow:0 18px 50px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.07); }
-  .step { display:flex; align-items:center; gap:12px; }
-  .stepnum { width:26px; height:26px; border-radius:50%; background:rgba(255,255,255,.1);
-    border:1px solid rgba(255,255,255,.25); color:#fff; font-size:13px; font-weight:700;
-    display:flex; align-items:center; justify-content:center; flex:none; }
-  .bar-div { width:1px; height:44px; background:var(--line); flex:none; }
-  .selname { color:#fff; font-size:14px; max-width:190px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; }
-  .field { display:flex; flex-direction:column; gap:5px; }
-  .field label { font-size:9px; text-transform:uppercase; letter-spacing:.09em; color:#787f87; }
-  .field input[type=text] { width:132px; padding:8px 10px; font-size:15px; border-radius:10px;
-    border:1px solid var(--line); background:rgba(255,255,255,.05); color:#fff; outline:none; }
-  .field select { padding:8px 8px; font-size:13px; border-radius:10px; border:1px solid var(--line);
-    background:rgba(255,255,255,.05); color:#fff; outline:none; }
-  .field input[type=color] { width:44px; height:34px; padding:2px; border-radius:10px;
-    border:1px solid var(--line); background:rgba(255,255,255,.05); }
-  .field input[type=range] { width:110px; accent-color:#fff; }
-  .field .val { font-size:11px; color:#fff; }
-  .chk { display:flex; align-items:center; gap:6px; font-size:12px; color:#dfe3e7; }
-  .chk input[type=checkbox] { accent-color:#fff; width:14px; height:14px; }
-  #dlOne { padding:12px 22px; border-radius:13px; border:1px solid #fff; background:#fff; color:#08090b;
-    font-size:14px; font-weight:700; cursor:pointer; }
-  #dlOne:hover { background:#e9ebee; }
-  #selclear { padding:12px 12px; border-radius:13px; background:transparent; color:#c9ced3;
-    border:1px solid var(--line); font-size:14px; cursor:pointer; }
+  .dots { display:flex; gap:6px; flex:1; justify-content:center; }
+  .dot { border:1px solid var(--line); background:rgba(255,255,255,.04); color:#8b9198; border-radius:999px;
+    padding:8px 14px; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:7px; }
+  .dot b { width:18px; height:18px; border-radius:50%; background:rgba(255,255,255,.1); color:#fff;
+    font-size:10px; display:flex; align-items:center; justify-content:center; }
+  .dot.on { border-color:#fff; color:#fff; background:rgba(255,255,255,.1); }
+  .barbtn { padding:11px 20px; border-radius:13px; font-size:14px; cursor:pointer; flex:none; }
+  #prevBtn { background:transparent; color:#c9ced3; border:1px solid var(--line); }
+  #prevBtn:disabled { opacity:.35; cursor:default; }
+  #nextBtn { background:#e9ebee; color:#08090b; border:1px solid #fff; font-weight:700; }
+  #nextBtn:hover { background:#fff; }
 
-  #status { position:fixed; right:18px; bottom:210px; background:rgba(22,24,28,.95); color:#fff;
+  #status { position:fixed; right:18px; bottom:96px; background:rgba(22,24,28,.95); color:#fff;
     padding:10px 16px; border-radius:12px; border:1px solid var(--line); font-size:13px;
     opacity:0; transition:opacity .3s; pointer-events:none; z-index:40; }
-  @media (max-width:760px){
-    body { padding-bottom:300px; }
-    .bar-div { display:none; }
-    #bar { gap:10px; }
-  }
+  @media (max-width:760px){ #bar { flex-wrap:wrap; } .dot span.txt { display:none; } .panel { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
 <header>
-  <h1>GRID Emoji Studio</h1>
-  <p>1 — кликни по эмодзи · 2 — настрой текст, шрифт и цвет · 3 — скачай .tgs для Telegram</p>
+  <h1>Emoji Studio</h1>
+  <p>Своё название на анимированных эмодзи · экспорт в .tgs для Telegram</p>
 </header>
 
 <main>
-  <h2>intervfxpack · <span id="tplcount">…</span></h2>
-  <div class="grid" id="pack"></div>
+  <section id="step1" class="step active">
+    <h2>Шаг 1 · Выбери эмодзи — <span id="tplcount">…</span></h2>
+    <div class="grid" id="pack"></div>
+  </section>
+
+  <section id="step2" class="step">
+    <h2>Шаг 2 · Текст и стиль</h2>
+    <div class="studio">
+      <div class="previewbox">
+        <lottie-player id="big" loop autoplay></lottie-player>
+        <div class="selname" id="selname">—</div>
+      </div>
+      <div class="panel">
+        <div class="group">
+          <h3>Текст</h3>
+          <div class="field">
+            <label for="word">Название</label>
+            <input type="text" id="word" value="GRID" maxlength="12" spellcheck="false">
+          </div>
+          <div class="field">
+            <label for="font">Шрифт</label>
+            <select id="font">
+              <option value="block">Блок</option>
+              <option value="rounded">Скруглённый</option>
+              <option value="outline">Контур</option>
+            </select>
+          </div>
+        </div>
+        <div class="group">
+          <h3>Цвета</h3>
+          <div class="field">
+            <label for="color">Цвет текста</label>
+            <input type="color" id="color" value="#ffffff">
+          </div>
+          <div class="field">
+            <label>Обводка</label>
+            <div class="chk"><input type="checkbox" id="strokeOn"> <input type="color" id="strokeColor" value="#000000"></div>
+          </div>
+          <div class="field">
+            <label>Тон эмодзи</label>
+            <div class="chk"><input type="checkbox" id="tintOn"> <input type="color" id="tintColor" value="#ffffff"></div>
+          </div>
+        </div>
+        <div class="group" style="grid-column:1 / -1;">
+          <h3>Размер текста</h3>
+          <div class="field">
+            <label for="size">Масштаб <span class="val" id="sizeVal">100%</span></label>
+            <input type="range" id="size" min="50" max="140" value="100">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="step3" class="step">
+    <h2>Шаг 3 · Готово</h2>
+    <div class="finale">
+      <lottie-player id="big3" loop autoplay></lottie-player>
+      <div class="fileinfo" id="fileinfo">—</div>
+      <button id="dlBig">Скачать .tgs</button>
+      <button class="linkbtn" id="againBtn">← Выбрать другой эмодзи</button>
+    </div>
+  </section>
 </main>
 
-<div id="bar">
-  <div class="step">
-    <span class="stepnum">1</span>
-    <div class="field"><label>Эмодзи</label><span id="selname" class="selname">выбери карточку</span></div>
+<nav id="bar">
+  <button class="barbtn" id="prevBtn">← Назад</button>
+  <div class="dots">
+    <div class="dot on" data-step="1"><b>1</b><span class="txt">Выбор</span></div>
+    <div class="dot" data-step="2"><b>2</b><span class="txt">Стиль</span></div>
+    <div class="dot" data-step="3"><b>3</b><span class="txt">Скачать</span></div>
   </div>
-  <div class="bar-div"></div>
-  <div class="step">
-    <span class="stepnum">2</span>
-    <div class="field">
-      <label for="word">Текст</label>
-      <input type="text" id="word" value="GRID" maxlength="12" spellcheck="false">
-    </div>
-    <div class="field">
-      <label for="font">Шрифт</label>
-      <select id="font">
-        <option value="block">Блок</option>
-        <option value="rounded">Скруглённый</option>
-        <option value="outline">Контур</option>
-      </select>
-    </div>
-    <div class="field">
-      <label for="color">Цвет</label>
-      <input type="color" id="color" value="#ffffff">
-    </div>
-    <div class="field">
-      <label>Обводка</label>
-      <div class="chk"><input type="checkbox" id="strokeOn"> <input type="color" id="strokeColor" value="#000000"></div>
-    </div>
-    <div class="field">
-      <label>Тон</label>
-      <div class="chk"><input type="checkbox" id="tintOn"> <input type="color" id="tintColor" value="#ffffff"></div>
-    </div>
-    <div class="field">
-      <label>Размер <span class="val" id="sizeVal">100%</span></label>
-      <input type="range" id="size" min="50" max="140" value="100">
-    </div>
-  </div>
-  <div class="bar-div"></div>
-  <div class="step">
-    <span class="stepnum">3</span>
-    <button id="dlOne">Скачать .tgs</button>
-    <button id="selclear" title="Снять выбор">×</button>
-  </div>
-</div>
+  <button class="barbtn" id="nextBtn">Далее →</button>
+</nav>
 <div id="status"></div>
 </body>
 </html>
