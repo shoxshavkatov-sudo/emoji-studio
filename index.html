@@ -6,9 +6,9 @@
 <title>Emoji Studio</title>
 <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js" defer></script>
-<script src="engine.js?v=11" defer></script>
-<script src="manifest.js?v=11" defer></script>
-<script src="app.js?v=11" defer></script>
+<script src="engine2.js" defer></script>
+<script src="manifest2.js" defer></script>
+<script src="app2.js" defer></script>
 <style>
   :root { color-scheme: dark; --line: rgba(255,255,255,.09); --glass: rgba(20,22,26,.62); }
   * { box-sizing: border-box; }
@@ -130,7 +130,7 @@
       <button class="toolbtn" id="luckyBtn">🎲 Мне повезёт</button>
     </div>
     <h2>Шаг 1 · Выбери эмодзи — <span id="tplcount">…</span></h2>
-    <div class="grid" id="pack"></div>
+    <div class="grid" id="pack"><div id="bootmsg" style="grid-column:1/-1;color:#8b9198;font-size:14px;text-align:center;padding:30px">Загружаю эмодзи… если это сообщение висит больше минуты — обнови страницу (Ctrl+Shift+R)</div></div>
   </section>
 
   <section id="step2" class="step">
