@@ -6,9 +6,9 @@
 <title>Emoji Studio</title>
 <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js" defer></script>
-<script src="engine.js?v=10" defer></script>
-<script src="manifest.js?v=10" defer></script>
-<script src="app.js?v=10" defer></script>
+<script src="engine.js?v=11" defer></script>
+<script src="manifest.js?v=11" defer></script>
+<script src="app.js?v=11" defer></script>
 <style>
   :root { color-scheme: dark; --line: rgba(255,255,255,.09); --glass: rgba(20,22,26,.62); }
   * { box-sizing: border-box; }
@@ -96,6 +96,23 @@
   #status { position:fixed; right:18px; bottom:96px; background:rgba(22,24,28,.95); color:#fff;
     padding:10px 16px; border-radius:12px; border:1px solid var(--line); font-size:13px;
     opacity:0; transition:opacity .3s; pointer-events:none; z-index:40; }
+  /* toolbar */
+  .toolbar { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin:6px 0 4px; }
+  .toolbar input { width:240px; padding:10px 14px; font-size:14px; border-radius:12px;
+    border:1px solid var(--line); background:rgba(255,255,255,.05); color:#fff; outline:none; }
+  .toolbtn { padding:10px 16px; font-size:13px; border-radius:12px; border:1px solid var(--line);
+    background:rgba(255,255,255,.05); color:#c9ced3; cursor:pointer; }
+  .toolbtn:hover, .toolbtn.on { border-color:#fff; color:#fff; background:rgba(255,255,255,.1); }
+  .favbtn { position:absolute; top:6px; left:8px; z-index:3; width:22px; height:22px; border-radius:50%;
+    border:none; background:rgba(10,11,13,.55); color:#8b9198; font-size:13px; line-height:22px; cursor:pointer; }
+  .favbtn.on { color:#ffd34d; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { padding:7px 12px; font-size:12px; border-radius:10px; border:1px solid var(--line);
+    background:rgba(255,255,255,.05); color:#c9ced3; cursor:pointer; }
+  .chip:hover { border-color:#fff; color:#fff; }
+  .bubble { background:#212d3b; border-radius:4px 16px 16px 16px; padding:14px 18px;
+    box-shadow:0 8px 24px rgba(0,0,0,.35); position:relative; }
+  .bubble::before { content:'в чете Telegram'; position:absolute; top:-22px; left:2px; color:#8b9198; font-size:11px; }
   @media (max-width:760px){ #bar { flex-wrap:wrap; } .dot span.txt { display:none; } .panel { grid-template-columns:1fr; } }
 </style>
 </head>
@@ -107,6 +124,11 @@
 
 <main>
   <section id="step1" class="step active">
+    <div class="toolbar">
+      <input type="text" id="search" placeholder="Поиск эмодзи…">
+      <button class="toolbtn" id="favToggle">★ Избранное</button>
+      <button class="toolbtn" id="luckyBtn">🎲 Мне повезёт</button>
+    </div>
     <h2>Шаг 1 · Выбери эмодзи — <span id="tplcount">…</span></h2>
     <div class="grid" id="pack"></div>
   </section>
@@ -124,6 +146,16 @@
           <div class="field">
             <label for="word">Название</label>
             <input type="text" id="word" value="GRID" maxlength="12" spellcheck="false">
+          </div>
+          <div class="field">
+            <label>Быстрые слова</label>
+            <div class="chips">
+              <button class="chip" data-w="GRID">GRID</button>
+              <button class="chip" data-w="ГРИД">ГРИД</button>
+              <button class="chip" data-w="TON">TON</button>
+              <button class="chip" data-w="PUMP">PUMP</button>
+              <button class="chip" data-w="LFG">LFG</button>
+            </div>
           </div>
           <div class="field">
             <label for="font">Шрифт</label>
@@ -171,7 +203,9 @@
   <section id="step3" class="step">
     <h2>Шаг 3 · Готово</h2>
     <div class="finale">
-      <lottie-player id="big3" loop autoplay></lottie-player>
+      <div class="bubble">
+        <lottie-player id="big3" loop autoplay></lottie-player>
+      </div>
       <div class="fileinfo" id="fileinfo">—</div>
       <button id="dlBig">Скачать .tgs</button>
       <button class="linkbtn" id="againBtn">← Выбрать другой эмодзи</button>

@@ -1,5 +1,5 @@
 /* Emoji Studio — 3-step wizard: 1 choose → 2 style → 3 download.
- * Cards animate via a background load queue (scroll gives priority). */
+ * Extras: search, random pick, favorites (localStorage), TG-bubble preview. */
 (function () {
 'use strict';
 
@@ -38,76 +38,19 @@ function buildDoc(rec) {
   return state.tint ? ES.tintDoc(doc, state.tintColor) : doc;
 }
 
-/* logo upload: decode image, downsample to a color grid (quantized) */
-function imageToGrid(file, cb) {
-  const img = new Image();
-  const url = URL.createObjectURL(file);
-  img.onload = () => {
-    const gh = 26; // grid height; width follows aspect
-    const gw = Math.max(1, Math.min(64, Math.round(img.width / img.height * gh)));
-    const cv = document.createElement('canvas');
-    cv.width = gw; cv.height = gh;
-    const ctx = cv.getContext('2d');
-    ctx.drawImage(img, 0, 0, gw, gh);
-    const data = ctx.getImageData(0, 0, gw, gh).data;
-    const grid = [];
-    for (let y = 0; y < gh; y++) {
-      const row = [];
-      for (let x = 0; x < gw; x++) {
-        const i = (y * gw + x) * 4;
-        const a = data[i + 3];
-        if (a < 120) { row.push(null); continue; }
-        // quantize channels to 8 steps to merge similar colors into runs
-        row.push([
-          (data[i] >> 5) << 5,
-          (data[i + 1] >> 5) << 5,
-          (data[i + 2] >> 5) << 5,
-        ]);
-      }
-      grid.push(row);
-    }
-    URL.revokeObjectURL(url);
-    cb(grid);
-  };
-  img.onerror = () => { URL.revokeObjectURL(url); flash('Не удалось прочитать картинку', true); };
-  img.src = url;
-}
-document.getElementById('logoFile').addEventListener('change', e => {
-  const f = e.target.files && e.target.files[0];
-  if (!f) return;
-  imageToGrid(f, grid => {
-    state.logo = grid;
-    document.getElementById('logoClear').style.display = '';
-    flash('Логотип применён — он заменит текст');
-    clearTimeout(deb);
-    deb = setTimeout(() => {
-      if (selected && selected.base) {
-        rebuildOne(selected);
-        if (step >= 2) bigLoad();
-      }
-    }, 200);
-  });
-});
-document.getElementById('logoClear').addEventListener('click', () => {
-  state.logo = null;
-  document.getElementById('logoFile').value = '';
-  document.getElementById('logoClear').style.display = 'none';
-  flash('Логотип убран — снова текст');
-  if (selected && selected.base) {
-    rebuildOne(selected);
-    if (step >= 2) bigLoad();
-  }
-});
-
 async function loadDoc(rec) {
   const buf = await (await fetch('tpl/' + rec.i + '.tgs')).arrayBuffer();
   rec.base = JSON.parse(pako.ungzip(new Uint8Array(buf), { to: 'string' }));
 }
 
-/* ---------- step 1: cards ---------- */
+/* ---------- step 1: cards + search / random / favorites ---------- */
 const cards = [];
 const packBox = document.getElementById('pack');
 document.getElementById('tplcount').textContent = window.MANIFEST.length;
+const favKey = 'emoji_studio_favs';
+let favs = {};
+try { favs = JSON.parse(localStorage.getItem(favKey) || '{}'); } catch (e) {}
+
 for (const m of window.MANIFEST) {
   const card = document.createElement('div');
   card.className = 'card';
@@ -122,12 +65,48 @@ for (const m of window.MANIFEST) {
   stage.appendChild(thumb);
   const nm = document.createElement('div');
   nm.className = 'nm'; nm.textContent = m.n;
-  card.append(stage, nm);
+  const fav = document.createElement('div');
+  fav.className = 'favbtn'; fav.textContent = '☆'; fav.title = 'В избранное';
+  if (favs[m.i]) { fav.textContent = '★'; fav.classList.add('on'); }
+  fav.addEventListener('click', e => {
+    e.stopPropagation();
+    if (favs[m.i]) { delete favs[m.i]; fav.textContent = '☆'; fav.classList.remove('on'); }
+    else { favs[m.i] = 1; fav.textContent = '★'; fav.classList.add('on'); }
+    try { localStorage.setItem(favKey, JSON.stringify(favs)); } catch (e2) {}
+    applyFilter();
+  });
+  card.append(fav, stage, nm);
   packBox.appendChild(card);
-  const rec = { i: m.i, name: m.n.replace(/[^\w-]+/g, '_').slice(0, 24) || 'emoji', el: card, stage, base: null, player: null };
+  const rec = { i: m.i, name: m.n.replace(/[^\w-]+/g, '_').slice(0, 24) || 'emoji', label: m.n, el: card, stage, base: null, player: null };
   card.addEventListener('click', () => { select(rec); goStep(2); });
   cards.push(rec);
 }
+
+let onlyFavs = false, query = '';
+function applyFilter() {
+  for (const rec of cards) {
+    const byFav = !onlyFavs || favs[rec.i];
+    const byQuery = !query || rec.label.toLowerCase().includes(query);
+    rec.el.style.display = (byFav && byQuery) ? '' : 'none';
+  }
+}
+document.getElementById('search').addEventListener('input', e => {
+  query = e.target.value.trim().toLowerCase();
+  applyFilter();
+});
+document.getElementById('favToggle').addEventListener('click', () => {
+  onlyFavs = !onlyFavs;
+  document.getElementById('favToggle').classList.toggle('on', onlyFavs);
+  applyFilter();
+});
+document.getElementById('luckyBtn').addEventListener('click', () => {
+  const pool = cards.filter(r => (!onlyFavs || favs[r.i]) && (!query || r.label.toLowerCase().includes(query)));
+  if (!pool.length) { flash('Нечего выбирать — смягчи фильтр', true); return; }
+  const rec = pool[Math.floor(Math.random() * pool.length)];
+  rec.el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  select(rec);
+  goStep(2);
+});
 
 let selected = null;
 function select(rec) {
@@ -145,7 +124,6 @@ async function ensurePlaying(rec) {
     rec.player.setAttribute('loop', '');
     rec.player.setAttribute('autoplay', '');
     rec.stage.appendChild(rec.player);
-    // Lit mounts the shadow DOM asynchronously; an immediate load() is dropped
     await new Promise(r => setTimeout(r, 150));
   }
   rebuildOne(rec);
@@ -162,6 +140,7 @@ async function pump() {
   pumping = true;
   while (queue.length) {
     const rec = queue.shift();
+    if (rec.el.style.display === 'none') { queue.push(rec); if (queue.every(r => r.el.style.display === 'none')) break; await new Promise(r => setTimeout(r, 40)); continue; }
     try { await ensurePlaying(rec); } catch (e) { /* keep going */ }
     await new Promise(r => setTimeout(r, 60));
   }
@@ -210,9 +189,6 @@ dots.forEach(d => d.addEventListener('click', () => goStep(Number(d.dataset.step
 document.getElementById('againBtn').addEventListener('click', () => goStep(1));
 document.getElementById('dlBig').addEventListener('click', downloadSelected);
 
-/* big previews for steps 2/3 (Lit mount race: load after a beat) */
-let bigReady = false;
-setTimeout(() => { bigReady = true; }, 400);
 function loadBigPlayer(el, docStr) {
   try { el.load(docStr); } catch (e) { setTimeout(() => { try { el.load(docStr); } catch (e2) {} }, 250); }
 }
@@ -251,7 +227,62 @@ function downloadSelected() {
   } catch (e) { flash('ERR ' + rec.name + ': ' + e.message, true); }
 }
 
-/* inputs: rebuild selected card + big previews (debounced) */
+/* logo upload: decode image, downsample to a color grid (quantized) */
+function imageToGrid(file, cb) {
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  img.onload = () => {
+    const gh = 26;
+    const gw = Math.max(1, Math.min(64, Math.round(img.width / img.height * gh)));
+    const cv = document.createElement('canvas');
+    cv.width = gw; cv.height = gh;
+    const ctx = cv.getContext('2d');
+    ctx.drawImage(img, 0, 0, gw, gh);
+    const data = ctx.getImageData(0, 0, gw, gh).data;
+    const grid = [];
+    for (let y = 0; y < gh; y++) {
+      const row = [];
+      for (let x = 0; x < gw; x++) {
+        const i = (y * gw + x) * 4;
+        const a = data[i + 3];
+        if (a < 120) { row.push(null); continue; }
+        row.push([(data[i] >> 5) << 5, (data[i + 1] >> 5) << 5, (data[i + 2] >> 5) << 5]);
+      }
+      grid.push(row);
+    }
+    URL.revokeObjectURL(url);
+    cb(grid);
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); flash('Не удалось прочитать картинку', true); };
+  img.src = url;
+}
+state.logo = null;
+document.getElementById('logoFile').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  imageToGrid(f, grid => {
+    state.logo = grid;
+    document.getElementById('logoClear').style.display = '';
+    flash('Логотип применён — он заменит текст');
+    if (selected && selected.base) { rebuildOne(selected); if (step >= 2) bigLoad(); }
+  });
+});
+document.getElementById('logoClear').addEventListener('click', () => {
+  state.logo = null;
+  document.getElementById('logoFile').value = '';
+  document.getElementById('logoClear').style.display = 'none';
+  flash('Логотип убран — снова текст');
+  if (selected && selected.base) { rebuildOne(selected); if (step >= 2) bigLoad(); }
+});
+
+/* quick word presets */
+document.querySelectorAll('.chip').forEach(ch => {
+  ch.addEventListener('click', () => {
+    document.getElementById('word').value = ch.dataset.w;
+    document.getElementById('word').dispatchEvent(new Event('input', { bubbles: true }));
+  });
+});
+
 let deb;
 ['word', 'color', 'strokeOn', 'strokeColor', 'tintOn', 'tintColor', 'size', 'font'].forEach(id => {
   document.getElementById(id).addEventListener('input', () => {
