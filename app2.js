@@ -5,9 +5,20 @@
 (function boot() {
   var bootEl = document.getElementById('bootmsg');
   if (bootEl) bootEl.remove();
+  var box = document.getElementById('pack');
+  function fail(msg) {
+    if (box) box.innerHTML = '<div style="grid-column:1/-1;color:#e58a8a;text-align:center;padding:30px">' + msg + '</div>';
+  }
+  if (!window.customElements || !window.customElements.get('lottie-player')) {
+    fail('Библиотека анимаций (lottie-player) не загрузилась. Проверь интернет и обнови страницу.');
+    return;
+  }
+  if (typeof window.pako === 'undefined') {
+    fail('Библиотека архивации (pako) не загрузилась. Проверь интернет и обнови страницу.');
+    return;
+  }
   if (typeof window.ES === 'undefined' || !Array.isArray(window.MANIFEST)) {
-    var box = document.getElementById('pack');
-    if (box) box.innerHTML = '<div style="grid-column:1/-1;color:#e58a8a;text-align:center;padding:30px">Скрипты студии не загрузились. Обнови страницу с очисткой кэша (Ctrl+Shift+R или долгое нажатие → «Обновить»).</div>';
+    fail('Скрипты студии не загрузились. Обнови страницу с очисткой кэша (Ctrl+Shift+R или долгое нажатие → «Обновить»).');
     return;
   }
 })();
